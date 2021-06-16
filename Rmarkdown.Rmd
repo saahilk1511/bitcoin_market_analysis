@@ -1,0 +1,732 @@
+---
+title: "Bitcoin Market Analysis"
+author: "Sahil Khanna"
+date: "April 26, 2021"
+output:
+  html_document:
+    code_folding: hide
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: yes
+  pdf_document:
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Context
+
+Bitcoin is the longest-running and most well-known open-source peer-to-peer cryptocurrency. Launched in 2009 by its anonymous creator Satoshi Nakamoto, Bitcoin originally serves as a decentralized medium of digital exchange, with transactions verified and recorded in a public distributed ledger, also known as the blockchain. In doing so, a person transacting value across the Bitcoin network does so without needing an intermediary. 
+
+Every transaction block contains a SHA-256 cryptographic hash of the previous transaction block. They are thus “chained” together, serving as an immutable record of all transactions that have ever occurred across its decentralized network. 
+
+There can be only 21 million Bitcoin tokens. Many investors and analysts treat its underlying scarcity as similar to gold, a traditional safe-haven asset. Therefore, Bitcoin has grown from a financial experiment to a serious contender in the global hedging instrument space. That said, its demand as a financial instrument has boomed exponentially in its 12-year lifetime.
+
+The report below includes historical Bitcoin market data at 1-min intervals for select cryptocurrency exchanges.
+
+
+# Objective
+
+To analyze and summarize Bitcoin price performance between January 2012 and December 2020 by studying its distribution of closing index, volume profile, and transaction data.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+options(digits = 4 , scipen = 1)
+setwd("/Users/sahilkhanna/Downloads") 
+
+library(prob)
+library(plotly)
+library(UsingR)
+library(sampling)
+library(heatmaply)
+library(tidyverse)
+
+
+bitcoin <- read.csv("bitstampUSD_1-min_data_2012-01-01_to_2020-12-31.csv", header = TRUE )
+
+##### Data Wrangling
+
+bitcoin <- na.omit(bitcoin) # removing missing values from the original dataset
+rownames(bitcoin) <- 1:nrow(bitcoin)
+
+# converting Unix time stamp into date object
+bitcoin$Timestamp <- as.POSIXct(bitcoin$Timestamp, origin = "1970-01-01", tz = "GMT")
+bitcoin$Year <- format(bitcoin$Timestamp, format="%Y")
+bitcoin$Month <- format(bitcoin$Timestamp, "%m")
+bitcoin$Day <- format(bitcoin$Timestamp, "%d")
+bitcoin$Hour <- format(bitcoin$Timestamp, "%H")
+bitcoin$Minute <- format(bitcoin$Timestamp, "%M")
+bitcoin$Weekday <- weekdays(bitcoin$Timestamp)
+bitcoin$Timestamp <- as.Date(as.POSIXct(bitcoin$Timestamp, origin="1970-01-01"))
+
+
+```
+
+# Bitcoin Price Through the History
+
+The virtual currency has had a volatile trading history since its creation in 2009. The first most notable price hike occurred during 2013 when the cost to purchase one Bitcoin reached $1,124 in November. 
+
+Four years later, the cryptocurrency experienced a meteoric rise and reached record highs, with bids on some exchanges for single bitcoin touching circa $20,000 during the December 2017 session. 
+
+However, the prices started tumbling in the months that followed. In the third quarter of 2020, there were around 18.5 million bitcoins in circulation worldwide, and the market capitalization of Bitcoin was approximately $200 billion.
+
+Bitcoins trading is available across multiple cryptocurrency exchanges across the globe. Each exchange maintains a private market maker to reflect on Bitcoin’s ask and bid rate. Therefore, the bitcoin price tends to vary per the exchange it trades on. Meanwhile, some services, including Coindesk, curate the bitcoin price performances across all the exchanges to provide an average, unified bitcoin price.
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+options(digits = 4 , scipen = 15)
+
+plot_ly(bitcoin, y = ~Close, x = ~Timestamp, type = 'scatter', mode = 'lines' , 
+              color = ~Year, name = "") %>%
+  layout(showlegend = FALSE,
+         xaxis = list(title = "Year"),
+         yaxis = list(title = "Price [USD/BTC]"))
+
+
+```
+
+# Volume Confirms Trends
+
+The volume of bitcoin is the amount of market activity it experiences. In the case of extremely bullish and bearish price trends, one should notice spikes in Bitcoin’s trading volumes. A confirmed trend happens when the price moves with equal momentum as the volume.
+
+The trading volume indicates how many bitcoins are being bought and sold on specific exchanges. High trading volumes are likely to drive more on-chain activity. For instance, when people deposit and withdraw funds, their activity gets recorded atop the Bitcoin blockchain. That said, the higher the Bitcoin transactional activity, the excessive are the volumes. 
+
+It is also a good indicator of the general interest in the crypto market.
+
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+plot_ly(data = bitcoin, labels = ~Year, 
+        values = ~Volume_.Currency., type = 'pie', showlegend = T,
+        domain = list(x = c(1, 0), y = c(1, 0.5)),
+        textinfo='label+percent',
+        textposition = 'inside',
+        marker = list(colors = colors,
+                      line = list( width = 1)),
+        insidetextorientation='auto') %>% 
+  layout(title = 'Volume By Year')
+
+df <- subset(bitcoin, bitcoin$Year %in% c("2020","2019","2018","2017"))
+
+dd <- subset(bitcoin, bitcoin$Year %in% c("2016","2015","2014","2013","2012","2011"))
+
+
+df.1 <- df %>%
+  group_by(Year) %>%
+  summarise(Total_Volume = sum(Volume_.Currency.))
+
+dd.1 <- dd %>%
+  group_by(Year) %>%
+  summarise(Total_Volume = sum(Volume_.Currency.))
+
+plot_ly(data = df.1 , x = ~Year, y=~Total_Volume, type = "bar", name= "Last four years",
+        yaxis = list(title = "Volume in USD")) %>%
+  add_trace(data = dd.1,x = ~Year, y=~Total_Volume, type = "bar", name= "Initial years") %>%
+  layout(yaxis = list(title = "Volume in USD"))
+
+```
+
+
+# Distribution of volume of bitcoin transactions and closing index
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+plot_ly(type = "histogram", x = ~log(df$Volume_.Currency.)) %>%
+  layout(title = "Log(Volume) cumulative",xaxis = list(title = ""),
+         yaxis = list(title = ""))
+
+plot_ly(type = "box", x= ~df$Year,y= ~(df$Close)) %>%
+  layout(xaxis = list(title = "Year",showgrid = T),
+         yaxis = list(title = "Closing Index", type = "log", showgrid = F)) %>% 
+  hide_legend()
+
+
+plot_ly(type = "box", x= ~df$Year,y= ~(df$Volume_.Currency.)) %>%
+  layout(xaxis = list(title = "Year",showgrid = T),
+         yaxis = list(title = "Volume", type = "log", showgrid = T)) %>% 
+  hide_legend()
+
+```
+
+
+# Correlations Between Variables
+
+Correlation heatmap shows us that volume of corresponding currency has positive correlation with bitcoin prices, as expected. On the other volume of bitcoin naturally has a negative correlation with its own prices. The larger volume the bitcoin has, the less valuable it is.
+
+Correlation between prices of bitcoin in different times is 1.0.
+
+```{r echo=TRUE, fig.height=6, fig.width=8, message=FALSE, warning=FALSE}
+
+heatmaply_cor(
+  cor(df[c(2:8)]),
+  cellnote = cor(df[c(2:8)]),
+  cellnote_size = 10,
+  cellnote_textposition = "middle center",
+  k_col = 1, 
+  k_row = 1
+)
+
+```
+
+# Open vs Close
+
+"Open" and "Close" prices of bitcoin will be nearly linear, because they have 1.0 correlation.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+temp.2 <- df %>%
+  group_by(Timestamp, Year) %>%
+  transmute(avg_open = mean(Open),
+            avg_close = mean(Close),
+            avg_BTC_traded = mean(Volume_.BTC.))
+
+temp.2 <- distinct(temp.2, Timestamp, Year, avg_open,avg_close,avg_BTC_traded)
+
+plot_ly(type = "scatter", mode= "markers", x = ~ temp.2$avg_open, 
+        y= ~ temp.2$avg_close) %>%
+  layout(xaxis = list(title = "Opening Index", showgrid = F),
+         yaxis = list(title = "Closing Index",showgrid = F))
+
+```
+
+# Central Limit Theorem
+
+The Central Limit Theorem states that the sampling distribution of the sample means a normal distribution as the sample size gets larger — no matter what the shape of the population distribution. This fact holds especially true for sample sizes over 30.
+
+The graphs below shows the sample means of 5000 random samples of the closing index of sample sizes 10, 20, 30, and 40 follow a normal distribution.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+samples <- 5000
+sample.size1 <- 10
+
+xbar1 <- numeric(samples)
+
+for (i in 1: samples) {
+  xbar1[i] <- mean(sample(df$Close, size = sample.size1, replace = FALSE))
+}
+
+samples <- 5000
+sample.size2 <- 20
+
+xbar2 <- numeric(samples)
+
+for (i in 1: samples) {
+  xbar2[i] <- mean(sample(df$Close, size = sample.size2, replace = FALSE))
+}
+
+samples <- 5000
+sample.size3 <- 30
+
+xbar3 <- numeric(samples)
+
+for (i in 1: samples) {
+  xbar3[i] <- mean(sample(df$Close, size = sample.size3, replace = FALSE))
+}
+
+samples <- 5000
+sample.size4 <- 40
+
+xbar4 <- numeric(samples)
+
+for (i in 1: samples) {
+  xbar4[i] <- mean(sample(df$Close, size = sample.size4, replace = FALSE))
+}
+
+plot_ly(alpha = 0.6, type = "histogram", x = ~xbar1, histnorm = "probability", 
+        name = "x=10") %>%
+  add_histogram(x = ~xbar2,histnorm = "probability", name = "x=20" ) %>%
+  add_histogram(x = ~xbar3,histnorm = "probability", name = "x=30" ) %>%
+  add_histogram(x = ~xbar4,histnorm = "probability", name = "x=40" ) %>%
+  layout(barmode = "overlay",
+         xaxis = list(title = "",zeroline = FALSE))
+
+cat(" Original Data     Mean =", mean(df$Close),
+    " SD = ", sd(df$Close), ",\n",
+    "Sample Size = 10", " Mean =", mean(xbar1),
+    " SD = ", sd(xbar1), ",\n",
+    "Sample Size = 20", " Mean =", mean(xbar2),
+    " SD = ", sd(xbar2), ",\n",
+    "Sample Size = 30", " Mean =", mean(xbar3),
+    " SD = ", sd(xbar3), ",\n",
+    "Sample Size = 40", " Mean =", mean(xbar4),
+    " SD = ", sd(xbar4))
+
+
+```
+
+# Price analysis using sampling techniques
+
+Price analysis is the ongoing process of cryptocurrency traders and analysts finding patterns in the market to determine optimal trading strategies and gauge market sentiment.
+
+Using various sampling methods, we will try to identify these trends and market sentiment by randomly selecting days and it's corresponding closing index between 2017-2020.
+
+
+```{r echo=TRUE, fig.height=7, fig.width=9, message=FALSE, warning=FALSE}
+
+temp <- df %>%
+  group_by(Timestamp, Year) %>%
+  transmute(max_close = max(Close),
+            avg_close = mean(Close),
+            min_close = min(Close))
+
+temp <- distinct(temp, Timestamp, Year, max_close,avg_close,min_close)
+
+n <- 180
+N <- nrow(df)
+
+## SRSWOR
+
+s <- srswor(n, N)
+sample.2 <- df[s != 0, ]
+
+## Systematic Sampling
+
+k <- round(N / n)
+
+r <- sample(k, 1)
+
+# select every kth item
+
+s.1 <- seq(r, by = k, length = n)
+
+sample.3 <- df[s.1, ]
+
+## Plots
+
+sm.1 <- plot_ly(data = df, x = df$Timestamp, y =~df$Close, type = "scatter", 
+        mode = "lines", name ="Original data", 
+        line = list(color = 'rgb(209, 144, 144)')) %>%
+  layout(xaxis = list(title = "" ,showgrid = FALSE,showticklabels = FALSE),
+         yaxis = list(title = "Bitcoin Prices in $US" ,showgrid = FALSE))
+
+sm.2 <- plot_ly(type = "scatter", x = ~sample.2$Timestamp, mode = "lines", 
+            name ="SRSWOR", y =~sample.2$Close) %>%
+  layout(xaxis = list(title = "Year" ,showgrid = FALSE,showticklabels = F),
+         yaxis = list(title = "Bitcoin Prices in $US" ,showgrid = FALSE))
+
+sm.3 <- plot_ly(type = "scatter", x = ~sample.3$Timestamp, mode = "lines", 
+            name ="Systematic Sampling", y =~sample.3$Close) %>%
+  layout(xaxis = list(title = "Year" ,showgrid = FALSE,showticklabels = F),
+         yaxis = list(title = "Bitcoin Prices in $US" ,showgrid = FALSE))
+
+## Stratified Sampling
+
+freq <- table(df$Year)
+sizes <- ceiling(n * freq / sum(freq))
+
+
+st <- sampling::strata(df, stratanames = c("Year"),
+             size = sizes, method = "srswor")
+
+
+sample.4 <- getdata(df, st)
+
+sm.4 <- plot_ly(type = "scatter", x = ~sample.4$Timestamp, mode = "lines", 
+                 name ="Stratified Sampling", y =~sample.4$Close) %>%
+  layout(xaxis = list(title = "Year" ,showgrid = FALSE, showticklabels = T),
+         yaxis = list(title = "Bitcoin Prices in $US" ,showgrid = FALSE),
+         legend = list(x = 100, y = 0.5))
+
+cat(" Original Data        Mean =", mean(df$Close),
+    " SD = ", sd(df$Close), ",\n",
+    "SRSWOR", "\t \t             Mean =", mean(sample.2$Close),
+    " SD = ", sd(sample.2$Close), ",\n",
+    "Systematic Sampling", " Mean =", mean(sample.3$Close),
+    " SD = ", sd(sample.3$Close), ",\n",
+    "Stratified Sampling", " Mean =", mean(sample.4$Close),
+    " SD = ", sd(sample.4$Close))
+
+
+```
+
+## Observations
+
+### Tenets of Dow Theory - Market Movements
+
+In our technical market analysis using sampling methods, we focused on Bitcoin’s price action during randomly-chosen periods.
+
+__Main Movement__ – The main movement is the major trend currently underway. This trend is going to encompass years of market activity. The main movement in the Bitcoin market is bullish if you look at its complete trading history.
+
+```{r echo=TRUE, fig.height=7, fig.width=9, message=FALSE, warning=FALSE}
+
+plotly::subplot(sm.1, sm.2,sm.3, sm.4, nrows = 4, shareX = T)
+
+```
+
+
+__Medium Swing__ – A medium swing is a secondary market reaction. This reaction can last for up to three months. Medium swings include price retraces. A retrace is when Bitcoin’s market movement begins to return to its original state prior to the market activity.
+We sampled 90 random days in the Bitcoin market from 2019 and curated closing rates that appeared similar to the original data set.  
+
+
+```{r echo=TRUE, fig.height=7, fig.width=9, message=FALSE, warning=FALSE}
+
+df.2 <- df %>%
+  filter(Year == "2019")
+
+n1 <- 90
+N1 <- nrow(df.2)
+
+## SRSWOR
+
+s1 <- srswor(n1, N1)
+sample.2.1 <- df.2[s1 != 0, ]
+
+## Systematic Sampling
+
+k1 <- round(N1 / n1)
+
+r1 <- sample(k1, 1)
+
+# select every kth item
+
+s1.1 <- seq(r1, by = k1, length = n1)
+
+sample.3.1 <- df.2[s1.1, ]
+
+## Plots
+
+sm.1.1 <- plot_ly(data = df.2, x = ~Timestamp, y =~Close, type = "scatter", 
+        mode = "lines", name ="Original data", 
+        line = list(color = 'rgb(209, 144, 144)')) %>%
+  layout(xaxis = list(title = "" ,showgrid = FALSE,showticklabels = FALSE,showline = T),
+         yaxis = list(title = "Bitcoin Prices in $US" ,showgrid = FALSE,
+                      range = c(0,15000)))
+
+sm.2.1 <- plot_ly(data = sample.2.1, type = "scatter", x = ~Timestamp, mode = "lines", 
+            name ="SRSWOR", y =~Close) %>%
+  layout(xaxis = list(title = "Month" ,showgrid = FALSE,showticklabels = F, showline = T),
+         yaxis = list(title = "Bitcoin Prices in $US" ,showgrid = FALSE,
+                      range = c(0,15000)))
+
+sm.3.1 <- plot_ly(data = sample.3.1, type = "scatter", x = ~Timestamp, 
+                  mode = "lines", name ="Systematic Sampling", y =~Close) %>%
+  layout(xaxis = list(title = "Month" ,showgrid = FALSE,showticklabels = F,showline = T),
+         yaxis = list(title = "Bitcoin Prices in $US" ,showgrid = FALSE,
+                      range = c(0,15000)))
+
+## Stratified Sampling
+
+freq1 <- table(df.2$Month)
+sizes1 <- ceiling(n1 * freq1 / sum(freq1))
+
+
+st1 <- sampling::strata(df.2, stratanames = c("Month"),
+             size = sizes1, method = "srswor")
+
+
+sample.4.1 <- getdata(df.2, st1)
+
+sm.4.1 <- plot_ly(type = "scatter", x = ~sample.4.1$Timestamp, mode = "lines", 
+                 name ="Stratified Sampling", y =~sample.4.1$Close) %>%
+  layout(xaxis = list(title = "Month" ,showgrid = FALSE, showticklabels = T,showline = T),
+         yaxis = list(title = "Bitcoin Prices in $US" ,showgrid = FALSE,
+                      range = c(0,15000)),legend = list(x = 100, y = 0.5))
+
+cat(" Original Data        Mean =", mean(df.2$Close),
+    " SD = ", sd(df.2$Close), ",\n",
+    "SRSWOR", "\t     \t   Mean =", mean(sample.2.1$Close),
+    " SD = ", sd(sample.2.1$Close), ",\n",
+    "Systematic Sampling", " Mean =", mean(sample.3.1$Close),
+    " SD = ", sd(sample.3.1$Close), ",\n",
+    "Stratified Sampling", " Mean =", mean(sample.4.1$Close),
+    " SD = ", sd(sample.4.1$Close))
+
+plotly::subplot(sm.1.1, sm.2.1,sm.3.1, sm.4.1, nrows = 4, shareX = T)
+
+```
+
+
+# Tracking Bitcoin Price Performance Throughout 2017-2020
+
+Price analysis is the ongoing process of cryptocurrency of finding patterns in the market  and gauge market sentiment.
+
+The two main indicators that are sought after are whether or not the market is bullish with upward-trending price action or bearish with downward pressure on price.
+
+Price analysis techniques vary and are often used in unison to provide as detailed a perspective of market conditions as possible. We can analyze a bitcoin’s volume in relation to its price or use candlestick charts to gauge market sentiment on a daily basis.
+
+Ultimately these are means of spotting patterns at the micro and macro levels as indicators of overall industry growth.
+ 
+
+### Closing Index
+
+Number of days bitcoin traded above its yearly average
+
+```{r echo=TRUE, fig.height=7, fig.width=9, message=FALSE, warning=FALSE}
+
+
+temp2 <- filter(temp, Year =="2017")
+a.1 <- nrow(subset(temp2, temp2$max_close > mean(temp2$max_close)))
+
+temp3 <- filter(temp, Year =="2018")
+b.1 <- nrow(subset(temp3, temp3$max_close > mean(temp3$max_close)))
+
+temp4 <- filter(temp, Year =="2019")
+c.1 <- nrow(subset(temp4, temp4$max_close > mean(temp4$max_close)))
+
+temp5 <- filter(temp, Year =="2020")
+d.1 <- nrow(subset(temp5, temp5$max_close > mean(temp5$max_close)))
+
+pt.1 <- plot_ly(type = "bar", y = ~a.1, name = "2017",
+        text = ~round(a.1), textposition = 'auto') %>%
+  add_trace(y = ~b.1, name = "2018",
+            text = ~round(b.1), textposition = 'auto') %>%
+  add_trace(y = ~c.1, name = "2019",
+            text = ~round(c.1), textposition = 'auto') %>%
+  add_trace(y = ~d.1 ,name = "2020",
+            text = ~round(d.1), textposition = 'auto') %>%
+  layout(yaxis = list(title = ""),
+         xaxis = list(title = "",showticklabels = FALSE))
+
+temp.1 <- temp %>%
+  group_by(Year) %>%
+  summarise(max_close = max(max_close),
+            avg_close = mean(avg_close),
+            min_close = min(min_close))
+  
+pt.2 <- plot_ly(data = temp.1, type = "bar", x =~Year, y = ~max_close,
+        name = "Max Closing Index", text = ~round(max_close), textposition = 'inside',
+        marker = list(color = 'rgb(14,117,161)',width = 2)) %>%
+  add_trace(y = ~avg_close, name = "Avg Closing Index",
+            text = ~round(avg_close), textposition = 'inside',
+            marker = list(color = 'rgb(11,135,106)',width = 1.8)) %>%
+  add_trace(y = ~min_close, name = "Min Closing Index",
+            text = ~round(min_close), textposition = 'inside',
+            marker = list(color = 'rgb(255,153,51)',width = 1.8)) %>%
+  layout(yaxis = list(title = "Closing Index"),
+         barmode = 'group')
+
+pt.3 <- plot_ly(data = temp.1, x = ~Year, y = ~max_close, type = 'scatter', 
+               mode = 'lines', fill = 'tonexty', fillcolor='rgba(0,100,80,0.2)',
+               line = list(color = 'transparent'),
+               showlegend = FALSE, name = 'Max Closing Index') %>% 
+  add_trace(y = ~min_close, type = 'scatter', mode = 'lines',
+            fill = 'tonexty', fillcolor='rgba(0,100,80,0.2)', 
+            line = list(color = 'transparent'),
+            showlegend = FALSE, name = 'Min Closing Index') %>% 
+  add_trace(x = ~Year, y = ~avg_close, type = 'scatter', mode = 'lines',
+            line = list(color='rgb(0,100,80)'),name = 'Average Closing Index') %>% 
+  layout(title = "", legend = list(x = 100, y = 0.5),
+         xaxis = list(title = "Year",showgrid = TRUE,
+                      showline = F, showticklabels = TRUE, tickcolor = 'rgb(127,127,127)',
+                      ticks = 'outside', zeroline = FALSE),
+         yaxis = list(title = "Closing Index",
+                      showgrid = TRUE, showline = F,
+                      showticklabels = TRUE, tickcolor = 'rgb(127,127,127)',
+                      ticks = 'outside',zeroline = FALSE))
+
+plotly::subplot(pt.1, pt.2,pt.3, nrows = 3)
+
+```
+
+### Bitcoin Candlestick chart (2017-2020)
+
+Candlestick charts provide us with everything we need to know to understand the current state of the market value of an asset. We can see the opening and closing prices, the daily high and low, and can decide on what time intervals we want this information displayed.
+
+A green candlestick indicates that Bitcoin closed higher for the time period than its opening value. Anytime we see a red candle, it indicates there were some losses incurred by the asset. In this way, it’s easy to monitor market activity.
+
+In most candles, we will notice there’s a body. Where the main body of the candle begins is the opening price for the day. If the candle is green, the opening price will be the bottom of the candle body. If the candle is red, the body’s top will let you know the opening price.
+
+We can notice that the top or bottom always lines up with the proceeding candle in the chart. This alignment represents the close and opening of the next trading day. This time can varies depending on the trading interval you choose.
+
+There are also small lines sticking out from the top and bottom of the candle. These lines are known as shadows. Shadows represent the high and low for the day. In this way, we can ascertain an incredible amount of information from a candlestick chart in seconds.
+
+This data can then help us to make a timely investment decision.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+df.10 <- df %>%
+  group_by(Timestamp, Month, Day, Year) %>%
+  transmute(Close = mean(Close),
+            Open = mean(Open),
+            High = max(High),
+            Low = min(Low))
+
+df.10 <- distinct(df.10, Timestamp, Month, Day, Year, Close, Open, High, Low)
+
+
+gg.1 <- plot_ly(x = ~df.10$Timestamp, type="candlestick",
+        open = ~df.10$Open, close = ~df.10$Close,
+        high = ~df.10$High, low = ~df.10$Low) %>%
+  layout(title = "Candlestick chart for the last four Years",
+         xaxis = list(title="",showgrid= F),showlegend = F,
+         yaxis = list(title="",showgrid= F))
+gg.2 <- plot_ly(type = "scatter", mode = "lines", x = ~df$Timestamp,
+        y = ~df$Volume_.Currency., line = list(color = 'rgba(57, 156, 192, 1)')) %>%
+  layout(yaxis = list(title = "Volume"), showlegend = F,
+         xaxis = list(title = "", showgrid = F))
+
+rs <- list(visible = TRUE, x = 0.5, y = -0.055,
+           xanchor = 'center', yref = 'paper',
+           font = list(size = 9),
+           buttons = list(
+             list(count=1,
+                  label='RESET',
+                  step='all'),
+             list(count=1,
+                  label='1 YR',
+                  step='year',
+                  stepmode='backward'),
+             list(count=3,
+                  label='3 MO',
+                  step='month',
+                  stepmode='backward'),
+             list(count=1,
+                  label='1 MO',
+                  step='month',
+                  stepmode='backward')
+           ))
+
+plotly::subplot(gg.1, gg.2, nrows = 2, shareX = T) %>% 
+  layout(xaxis = list(rangeselector = rs),
+         legend = list(orientation = 'h', x = 0.5, y = -2.5,
+                       xanchor = 'center', yref = 'paper',
+                       font = list(size = 10),
+                       bgcolor = 'transparent'))
+
+```
+
+### Bitcoin Output Value
+
+The average value and count of all transaction outputs.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+btc.1 <- df %>%
+  group_by(Weekday) %>%
+  transmute(count = n(),
+            avg_vol = mean(Volume_.Currency.),
+            tol_vol = sum(Volume_.Currency.))
+
+btc.1 <- distinct(btc.1, count, Weekday, avg_vol,tol_vol )
+
+bt.1 <- plot_ly(data = btc.1, type = "bar" , x = ~Weekday, y= ~avg_vol,
+        text = ~round(avg_vol), textposition = 'inside',
+        marker = list(color = c('rgba(204,204,204,1)', 'rgba(204,204,204,1)',
+                                'rgba(204,204,204,1)', 'rgba(63, 191, 63, 0.8)',
+                                'rgba(204,204,204,1)','rgba(204,204,204,1)',
+                                'rgba(204,204,204,1)'))) %>%
+  layout(yaxis = list(title = "Avg. Transactions in USD"), showlegend = F,
+        xaxis = list(title = "Day",showticklabels = F, 
+                     categoryorder = "array", categoryarray = ~Weekday))
+
+bt.1.1 <- plot_ly(data = btc.1, type = "bar" , x = ~Weekday, y= ~count,
+                text = ~round(count), textposition = 'inside',
+                marker = list(color = c('rgba(204,204,204,1)', 'rgba(204,204,204,1)',
+                                        'rgba(63, 191, 63, 0.8)','rgba(204,204,204,1)', 
+                                        'rgba(204,204,204,1)','rgba(204,204,204,1)',
+                                        'rgba(204,204,204,1)'))) %>%
+  layout(yaxis = list(title = "# Transactions"), showlegend = F,
+         xaxis = list(title = "Day",categoryorder = "array", categoryarray = ~Weekday))
+
+plotly::subplot(bt.1, bt.1.1, nrows = 2, shareX = F, shareY = T) %>%
+  layout(title = "Transactions for each day of the week")
+
+btc.2 <- df %>%
+  group_by(Hour) %>%
+  transmute(count = n(),
+            avg_vol = mean(Volume_.Currency.),
+            tol_vol = sum(Volume_.Currency.))
+
+btc.2 <- distinct(btc.2, count, Hour, avg_vol,tol_vol )
+
+bt.2 <- plot_ly(data = btc.2, type = "bar" , x = ~Hour, y= ~avg_vol,
+                text = ~round(avg_vol), textposition = 'outside',
+                marker=list(color=~Hour, showscale=F)) %>%
+  layout(yaxis = list(title = "Avg. Transactions in USD"),
+         xaxis = list(title = "Hour",showticklabels = F),showlegend = F)
+
+
+bt.2.1 <- plot_ly(data = btc.2, type = "bar" , x = ~Hour, y= ~count,
+                text = ~round(count), textposition = 'outside',
+                marker=list(color=~Hour, showscale=F)) %>%
+  layout(yaxis = list(title = "# Transactions"),
+         xaxis = list(title = "Hour"),showlegend = F)
+
+plotly::subplot(bt.2, bt.2.1, nrows = 2, shareX = F, shareY = T) %>%
+  layout(title = "Average transactions per hour")
+
+btc.3 <- df%>%
+  group_by(Year) %>%
+  transmute(count = n(),
+            total_vol = sum(Volume_.Currency.))
+
+btc.3 <- distinct(btc.3, Year, count,total_vol)
+
+bt.3 <- plot_ly(data = btc.3, type = "bar" , x = ~Year, y= ~total_vol,
+                marker=list(color=~total_vol, showscale=F)) %>%
+  layout(yaxis = list(title = "Volume"),
+         xaxis = list(title = "Year",showticklabels = F),showlegend = F)
+
+bt.3.1 <- plot_ly(data = btc.3, type = "bar" , x = ~Year, y= ~count,
+                text = ~round(count), textposition = 'inside',
+                marker=list(color=~Year, showscale=F)) %>%
+  layout(yaxis = list(title = "# Transactions"),
+         xaxis = list(title = "Year"),showlegend = F)
+
+plotly::subplot(bt.3, bt.3.1, nrows = 2, shareX = F, shareY = T) %>%
+  layout(title = "Volume(in USD) by year")
+
+```
+
+### Bitcoin Interday Returns and Volatility Index
+
+Volatility is a measure of how much the price of a Bitcoin varies over time.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+temp.3 <- df %>%
+  filter(Hour == "23" , Minute =="59")
+
+temp.3$Mon_Year <- format(temp.3$Timestamp, "%m-%Y")
+temp.3$year_weeks <- strftime(temp.3$Timestamp, format = "%Y-W%V")
+
+for (i in (1:nrow(temp.3))) {
+  if (i==1) {
+    temp.3$returns[i] = 0
+  } else {
+    temp.3$returns[i] = ((temp.3$Close[i] / temp.3$Close[i-1]) -1)
+  }
+}
+
+plot_ly(data = temp.3,x = ~(Timestamp), y = ~(returns)*100, 
+        type = "scatter", mode = "lines") %>%
+  layout(xaxis = list(title = "Year",showgrid = T,tickangle = 315),
+         yaxis = list(title = "Interday Returns", showgrid = T))
+
+for (i in c(30,60,90)) {
+  
+  volt <- tail(temp.3,i) %>%
+    summarise(volatility = sd(returns),
+              index = volatility *100,
+              annual_volatility = sqrt(252) * volatility)
+  cat("Bitcoin Volatility Index for last",i,"days:",round(volt$index,2),"%","\n")
+}
+
+
+temp.3 <- temp.3 %>%
+  group_by(year_weeks) %>%
+  summarise(volatility = sd(returns),
+            index = volatility *100,
+            annual_volatility = sqrt(252) * volatility)
+
+plot_ly(data = temp.3,x = ~(year_weeks), y = ~index, 
+        type = "scatter", mode = "lines+markers") %>%
+  layout(xaxis = list(title = "Year",showgrid = F,tickangle = 315),
+         yaxis = list(title = "Volatility Index", showgrid = F))
+
+
+```
+
+
+# Conclusion
+
+Bitcoin's value has been historically quite volatile and will remain volatile for the foreseeable future. It is highly reactive to external trends and other market fluctuations.
+Bitcoin has seen four significant corrections of the magnitude of 40% & above, with an average correction rate of 36%. The major market correction happened during its bull run in the year 2018. From Mid-March 2020 until 31st Dec 2020, Bitcoin has seen a price increase of 650% ($25032 in dollar value).
+
