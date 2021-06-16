@@ -36,7 +36,6 @@ To analyze and summarize Bitcoin price performance between January 2012 and Dece
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 options(digits = 4 , scipen = 1)
-setwd("/Users/sahilkhanna/Downloads") 
 
 library(prob)
 library(plotly)
